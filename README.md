@@ -15,7 +15,7 @@ This completes the Phase 2 interface foundation—not a production-ready communi
 Replace `YOUR-OWNER/YOUR-REPOSITORY` with the repository's actual GitHub path, then run:
 
 ```sh
-git clone https://github.com/YOUR-OWNER/YOUR-REPOSITORY.git
+git clone https://github.com/Abhayrajput29/CodeBloom.git
 cd YOUR-REPOSITORY
 node scripts/install.mjs
 pnpm dev
