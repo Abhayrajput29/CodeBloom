@@ -1,0 +1,20 @@
+# Local environment secrets
+.env
+.env.*
+!.env.example
+
+# Dependencies and build output
+node_modules/
+.next/
+out/
+dist/
+coverage/
+playwright-report/
+test-results/
+.vercel/
+tsconfig.tsbuildinfo
+
+# Local tooling and OS files
+.DS_Store
+*.log
+.work/
