@@ -10,9 +10,13 @@ const manifest = JSON.parse(
 ) as RouteManifest;
 
 describe("public route manifest", () => {
-  it("declares the CodeBloom home route", () => {
-    expect(manifest.routes).toContainEqual({ path: "/", title: "CodeBloom" });
-  });
+  it("declares the public landing and authentication routes", () => {
+    expect(manifest.routes).toContainEqual({ path: "/", title: "CodeBloom public landing" });
+    expect(manifest.routes).toContainEqual({ path: "/login", title: "Sign in" });
+    expect(manifest.routes).toContainEqual({ path: "/signup", title: "Create account" });
+    expect(manifest.routes).toContainEqual({ path: "/dashboard", title: "Community feed (sign-in required)" });
+    expect(manifest.routes).toContainEqual({ path: "/settings/profile", title: "Developer profile (sign-in required)" });
+	});
 
   it("contains unique absolute route paths", () => {
     const paths = manifest.routes.map((route) => route.path);

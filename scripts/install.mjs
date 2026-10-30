@@ -8,6 +8,15 @@ import { dirname, resolve } from "node:path";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const isWindows = process.platform === "win32";
 const shell = isWindows;
+const args = process.argv.slice(2);
+const startAfterInstall = args.includes("--start");
+const unknownArgs = args.filter((argument) => argument !== "--start");
+
+if (unknownArgs.length > 0) {
+  console.error(`Unknown option(s): ${unknownArgs.join(", ")}`);
+  console.error("Usage: node scripts/install.mjs [--start]");
+  process.exit(2);
+}
 
 function run(command, args, options = {}) {
   return spawnSync(command, args, {
@@ -76,4 +85,13 @@ try {
   }
 }
 
-console.log("Setup complete. Start the app with: pnpm dev");
+console.log("Setup complete.");
+
+if (startAfterInstall) {
+  console.log("Starting the local development server. Press Ctrl+C to stop it.");
+  const server = run(command, [...prefix, "dev"], { stdio: "inherit" });
+  if (server.error) fail(`Could not start the development server: ${server.error.message}`);
+  if (server.status !== 0) process.exit(server.status ?? 1);
+} else {
+  console.log("Start the app with: pnpm dev");
+}

@@ -4,55 +4,66 @@
 
 CodeBloom is a project-centered developer community for discovering software, sharing work in progress, discussing technical decisions, and learning from other implementations.
 
-## Current state
+## Run locally on Windows, macOS, or Linux
 
-The repository contains a polished, responsive Next.js App Router interface with dark and light themes, a desktop navigation/feed/context layout, mobile navigation, project discovery and detail previews, community/profile/settings pages, feed sorting and search over sample projects, and browser-local bookmark/demo-vote interactions.
+### Requirements
 
-This completes the Phase 2 interface foundation—not a production-ready community service. Seeded project, profile, community, activity, and request data is synthetic; projects created without Supabase remain local to that browser. Votes, comments, follows, notifications, and messages are not persisted. The Following feed and private conversations are not connected. One migration currently covers profiles, projects, tags, and bookmarks; the remaining social/messaging schema, security tests, and deployment are not complete. Supabase credentials in `.env.local` do not prove that migrations, Auth, RLS, Storage, Realtime, or production domains are configured or verified.
+Install [Git](https://git-scm.com/downloads) and [Node.js 20.9 or later](https://nodejs.org/en/download). The project pins pnpm `12.11.2`; the setup script uses Corepack when available and otherwise requires that exact pnpm version. If you need to install pnpm yourself, run:
 
-## Install from GitHub
+```sh
+npm install --global pnpm@12.11.2
+```
 
-Replace `YOUR-OWNER/YOUR-REPOSITORY` with the repository's actual GitHub path, then run:
+### One-command setup and start
+
+Open Terminal on macOS/Linux or PowerShell on Windows, then run these same commands:
 
 ```sh
 git clone https://github.com/Abhayrajput29/CodeBloom.git
-cd YOUR-REPOSITORY
-node scripts/install.mjs
-pnpm dev
+cd CodeBloom
+node scripts/install.mjs --start
 ```
 
-The bootstrap requires Node.js 20.9 or later. It uses Corepack to select the exact pnpm version pinned in `package.json`, installs only from the committed lockfile, and creates `.env.local` from `.env.example` only if a local file does not already exist. It never installs Node or pnpm globally and never overwrites existing credentials. First-time setup may need package-registry network access. Fixture-driven browsing needs no Supabase or GitHub credentials. Open [http://localhost:3000](http://localhost:3000).
+The script installs the locked dependencies, creates `.env.local` from `.env.example` only when `.env.local` does not already exist, and starts the development server. It never overwrites an existing local environment file. When the server reports it is ready, open [http://localhost:3000](http://localhost:3000). Press **Ctrl+C** in the terminal to stop it.
 
-The same bootstrap can be run from the root of an existing checkout with `node scripts/install.mjs`. Alternatively, if dependencies are already installed, start the site with `pnpm dev`. `.env.local` is ignored by Git; keep privileged keys out of `NEXT_PUBLIC_` variables. Before using project publishing, review `supabase/migrations/0001_profiles_projects.sql`, apply it to a non-production Supabase project, and configure Auth and its allowed URLs. A live publish/auth flow has not been verified.
+After the first setup, start the server directly with `pnpm dev`. To install dependencies and prepare `.env.local` without starting the server, use `node scripts/install.mjs`. The first installation requires access to the package registry.
 
-## GitHub automation
+### Optional Supabase configuration
 
-`.github/workflows/ci.yml` runs on pushes, pull requests, and manual dispatch. It sets up Node.js 22 and pnpm 12.11.2, performs a frozen-lockfile install, then runs type-check, lint, unit tests, and the production build. It requires no secrets and does not deploy. GitHub runs the workflow after the repository is pushed to GitHub.
+Public browsing and the local preview work without Supabase credentials. To use the service-backed authentication and database features, add `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` to `.env.local` (the legacy `NEXT_PUBLIC_SUPABASE_ANON_KEY` is also supported). Configure Supabase Email Auth and allow the local callback URLs `http://localhost:3000/auth/callback` and `http://127.0.0.1:3000/auth/callback`.
 
-## Validation
+Never expose a Supabase service-role key in browser code or in a variable prefixed with `NEXT_PUBLIC_`. Review [Setup and environment configuration](docs/setup.md) and [Security and privacy](docs/security.md) before connecting a Supabase project. Database-backed features require the appropriate migrations; the social migration and several live-service end-to-end checks are still pending. Do not treat the local preview fixtures as live community data.
+
+## Development commands
+
+Run these from the project directory on any supported platform:
 
 ```sh
-pnpm typecheck
-pnpm lint
-pnpm test
-pnpm build
+pnpm dev        # start the local development server
+pnpm typecheck  # TypeScript check
+pnpm lint       # ESLint
+pnpm test       # unit tests
+pnpm build      # production build
 ```
 
-On the current tree, `pnpm typecheck`, `pnpm lint`, `pnpm test` (13 tests across 4 files), and `pnpm build` all passed; the build uses `next build --webpack`. `node scripts/install.mjs` also completed and preserved the existing `.env.local`; it reused the current package cache (zero downloads), so a fresh clone/new-package download remains unverified. Manual browser/device visual review and live Supabase operations need separate verification.
+GitHub Actions runs the type-check, lint, unit tests, and production build on Linux, macOS, and Windows for pushes, pull requests, and manual dispatch. It does not deploy the app and does not require secrets. See [Contributing](CONTRIBUTING.md) before opening a pull request.
+
+## Project status
+
+The application includes a public landing and project preview, Supabase email-auth flows, profile APIs and editing, project APIs, and feed/social code. Public preview content may be fixture data. Live behavior depends on correct Supabase configuration, migrations, RLS policies, and end-to-end verification. Community membership, private chat, notification delivery, media storage, and deployment are not implemented or verified as production services.
 
 ## Documentation
 
+- [Setup and environment configuration](docs/setup.md)
+- [Contributing](CONTRIBUTING.md)
 - [Architecture](docs/architecture.md)
 - [Database schema and RLS design](docs/database-schema.md)
 - [Security and privacy](docs/security.md)
-- [GitHub integration plan](docs/github-integration.md)
-- [Setup and environment configuration](docs/setup.md)
+- [GitHub integration](docs/github-integration.md)
 - [Design direction](docs/design-direction.md)
 - [Development roadmap](docs/development-roadmap.md)
-- [Progress and next phase](docs/progress.md)
-- [Phase 2 plan](plan.md)
-- [Phase 2 checklist](TODO.md)
+- [Progress and next steps](docs/progress.md)
 
-## Stack and boundaries
+## Stack
 
-The application uses Next.js App Router, React, strict TypeScript, Tailwind CSS 4, Lucide, Supabase client helpers, and Zod input validation. Continue to follow the documented PostgreSQL/RLS architecture. Do not claim GitHub OAuth, production feeds/ranking, private messaging, Supabase service behavior, or deployment is functional until actually configured and tested.
+Next.js App Router, React, strict TypeScript, Tailwind CSS 4, Lucide, Supabase SSR/browser clients, and Zod.

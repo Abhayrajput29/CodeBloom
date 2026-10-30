@@ -1,6 +1,10 @@
 # CodeBloom Security, Privacy, Voting, Ranking, and Messaging
 
-**Status:** Design only. This document does not implement votes, feeds, messaging, RLS policies, or database functions.
+**Status:** Project votes, bookmarks, creator follows, comments, and the signed-in live dashboard feed now have API/UI implementations and unit tests. Migration `20261028210000_live_feed_social.sql` is pending on the configured non-production Supabase project, so these actions are not remotely operational/verified yet. Voting on posts/comments, broader production ranking controls, moderation, and messaging remain design/future work. Email auth, profile API/editor, public profile lookup, and atomic project creation are implemented; prior test-project auth/base-schema checks are documented in `docs/progress.md`.
+
+## Current project-only social implementation boundary
+
+The live social migration creates one project vote per user/project, creator follow edges, and comments capped at 2,000 characters. RLS binds every write to the authenticated user; follow reads are private to the follower; comments are readable only for published public projects (or by their author); public vote/comment totals are exposed through aggregate-only views filtered to published public projects. Individual voter identities are not publicly selectable. The API independently verifies the session, rejects cross-origin POSTs, derives author/follower/voter IDs from the server session, validates UUIDs/handles and comment length, and responds with private/no-store feed data. These constraints and handlers have automated tests, but they have not been exercised against a real Supabase session. No rate limiting, moderation/report workflow, comment editing UI, or live feed cursor pagination has shipped; do not use this as a production abuse/moderation solution yet.
 
 ## D. Voting and ranking rules
 
@@ -120,6 +124,8 @@ Subscribe only to private, authenticated channels scoped to a conversation ID or
 - Validate OAuth callback `state` and redirect destinations; allowlist internal return paths to prevent open redirects.
 - Never trust a client-submitted user ID, role, ownership value, or OAuth profile field as authorization.
 
+**Implemented in this branch:** Supabase browser/SSR clients are used for email sign-in/sign-up, code-exchange callback, password recovery/reset, client session observation, and sign-out. The callback and post-auth destination are constrained to local paths. Next.js Proxy refreshes SSR cookies and redirects obvious signed-out requests early, but it is not the authorization boundary: protected pages verify `auth.getUser()` server-side, and Route Handlers authenticate independently. `GET/PATCH /api/profile` derives the profile ID from the verified user, rejects extra update fields through strict validation, restricts PATCH origins, and limits updates to username/display name/bio. Public `/u/:username` reads only username, display name, bio, and creation time under the public profile RLS policy. `POST /api/projects` checks the server user and calls a `SECURITY INVOKER` RPC that atomically writes the project and normalized tags. These code paths do not prove that Supabase Auth delivery, refresh, either migration, or live RLS has been remotely verified; test them in a disposable Supabase project before relying on accounts.
+
 ### RLS and ownership
 
 - Enable RLS on every application table and Storage bucket. Revoke broad default access and grant only necessary table operations.
@@ -127,6 +133,8 @@ Subscribe only to private, authenticated channels scoped to a conversation ID or
 - Public projects/posts/comments can be read anonymously only when the row and its parent are public. Private projects are owner-only until explicit sharing is implemented. Unlisted means not listed/discoverable, not inherently confidential; document whether possession of a link grants access.
 - Only project owner may edit/delete a project and manage its media/tags. A hard delete cascades only where intended; consider soft delete/audit needs before production.
 - Only content authors may edit/delete their comments/posts; enforce vote ownership and uniqueness in the database.
+- The current profile migration permits public profile reads but grants authenticated users updates only to `username`, `display_name`, and `bio`; the API also updates only the caller's `auth.uid()` row. Email, user ID, avatar URL, and timestamps are not editable through this feature.
+- Profile and project mutations use user-scoped SSR clients, not a service-role key. The project-creation RPC is `SECURITY INVOKER`, checks `auth.uid()`, and relies on table privileges and RLS; it is granted only to `authenticated`.
 
 ### Storage restrictions
 

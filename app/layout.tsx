@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { AppShell } from "@/components/app-shell";
+import { AuthProvider } from "@/components/auth-provider";
 import { CommunityProvider } from "@/components/community-provider";
 import { ThemeProvider } from "@/components/theme-provider";
 import "./globals.css";
@@ -11,5 +12,5 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
-  return <html lang="en" suppressHydrationWarning><body><ThemeProvider><CommunityProvider><AppShell>{children}</AppShell></CommunityProvider></ThemeProvider></body></html>;
+  return <html lang="en" suppressHydrationWarning><body><ThemeProvider><AuthProvider><CommunityProvider><AppShell>{children}</AppShell></CommunityProvider></AuthProvider></ThemeProvider></body></html>;
 }

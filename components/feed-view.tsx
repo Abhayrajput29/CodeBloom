@@ -1,38 +1,77 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { usePathname } from "next/navigation";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
-  ArrowLeft, ArrowUpRight, Bell, Bookmark, Check, Compass, LockKeyhole,
-  LogIn, MessageCircle, Plus, Search, Send, Settings2, ShieldCheck, Sparkles, Users,
+  ArrowUpRight, Bell, Bookmark, Check, Compass, LogIn, MessageCircle, Plus, Search,
+  Send, Settings2, Users,
 } from "lucide-react";
-import { ProjectCard, FeaturedProject } from "@/components/project-card";
+import { ProjectCard, ProjectArtwork } from "@/components/project-card";
+import { DashboardWelcome } from "@/components/dashboard-welcome";
 import { useCommunity } from "@/components/community-provider";
 import { useTheme } from "@/components/theme-provider";
 import { PageHeading, EmptyState } from "@/components/ui/page-state";
 import { PreviewNote } from "@/components/ui/preview-note";
-import { notifications, pendingRequests, projects as seedProjects } from "@/lib/demo-data";
+import { projects as seedProjects } from "@/lib/demo-data";
 import { getPreviewFeed, previewFeedModes, type PreviewFeedMode } from "@/lib/community-feed";
+import { sortLiveFeed, type LiveFeedMode, type LiveProject } from "@/lib/live-feed";
 import { safeGitHubRepositoryUrl, safeHttpsUrl } from "@/lib/urls";
+import { useAuth } from "@/components/auth-provider";
+import { AuthGateDialog } from "@/components/auth-gate-dialog";
+import { getSupabaseConfig } from "@/lib/supabase/config";
+import type { PublicProfile } from "@/lib/validation/profiles";
 
-export function FeedView({ mode = "home", initialQuery = "" }: { mode?: "home" | "explore"; initialQuery?: string }) {
+const emptyLiveProjects: LiveProject[] = [];
+
+export function FeedView({ mode = "home", initialQuery = "", authConfirmed = false, welcome = false }: { mode?: "home" | "explore"; initialQuery?: string; authConfirmed?: boolean; welcome?: boolean }) {
   const { projects } = useCommunity();
   const [filter, setFilter] = useState<PreviewFeedMode>("For you");
   const [query, setQuery] = useState(initialQuery);
-  const visible = useMemo(() => getPreviewFeed(projects, filter, query), [projects, filter, query]);
+  const [liveResult, setLiveResult] = useState<{ key: string; projects: LiveProject[]; error: string }>({ key: "", projects: [], error: "" });
+  const isDashboard = mode === "home";
+  const requestKey = `${filter}\u0000${query}`;
+  const liveLoading = isDashboard && liveResult.key !== requestKey;
+  const liveError = liveResult.key === requestKey ? liveResult.error : "";
+  const liveProjects = liveResult.key === requestKey ? liveResult.projects : emptyLiveProjects;
+  const visible = useMemo(() => isDashboard ? sortLiveFeed(liveProjects, filter as LiveFeedMode, query) : getPreviewFeed(projects, filter, query), [filter, isDashboard, liveProjects, projects, query]);
   const title = mode === "explore" ? "Explore projects" : "The community garden";
 
+  useEffect(() => {
+    if (!isDashboard) return;
+    const controller = new AbortController();
+    const params = new URLSearchParams({ mode: filter });
+    if (query.trim()) params.set("q", query.trim());
+    void fetch(`/api/feed?${params.toString()}`, { signal: controller.signal, cache: "no-store" })
+      .then(async (response) => {
+        const body = await response.json() as { projects?: LiveProject[]; error?: string };
+        if (!response.ok) throw new Error(body.error ?? "The live project feed could not be loaded.");
+        setLiveResult({ key: requestKey, projects: body.projects ?? [], error: "" });
+      })
+      .catch((cause: unknown) => {
+        if (cause instanceof DOMException && cause.name === "AbortError") return;
+        setLiveResult({ key: requestKey, projects: [], error: cause instanceof Error ? cause.message : "The live project feed could not be loaded." });
+      });
+    return () => controller.abort();
+  }, [filter, isDashboard, query, requestKey]);
+
   return <section className="feed-view">
-    <PageHeading eyebrow={mode === "explore" ? "DISCOVER WHAT'S GROWING" : "GOOD WORK, SHARED OPENLY"} title={title} description={mode === "explore" ? "Find the tools, experiments, and open-source work people are building." : "Fresh projects and thoughtful work from developers building in public."} action={<Link href="/publish" className="button button-primary"><Plus size={16} /> Share a project</Link>} />
-    {mode === "home" && projects[0] && <FeaturedProject project={projects[0]} />}
-    <div className="feed-toolbar"><div className="tabs" role="group" aria-label="Sort the preview feed">{previewFeedModes.map((item) => <button type="button" key={item} className={filter === item ? "tab-active" : ""} aria-pressed={filter === item} onClick={() => setFilter(item)}>{item}</button>)}</div>{mode === "explore" && <label className="inline-search"><Search size={15} aria-hidden="true" /><span className="sr-only">Search projects</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search projects" /></label>}</div>
-    {filter === "Following" ? <EmptyState icon={<Users size={24} />} title="Your following feed starts here" description="Following is not connected in this preview. Developer follows will appear here once accounts are implemented." action={<Link className="button button-outline" href="/explore"><Compass size={15} /> Explore projects</Link>} /> : visible.length ? <div className="feed-list" aria-live="polite">{visible.map((project, index) => <ProjectCard key={project.slug} project={project} featured={mode === "home" && index === 0} />)}</div> : <EmptyState icon={<Search size={24} />} title="No projects found" description="Try another project name, developer, or technology." action={query ? <button className="button button-outline" type="button" onClick={() => setQuery("")}>Clear search</button> : undefined} />}
-    <PreviewNote>Feed order and sample projects are local preview data, not the production ranking or a live community feed.</PreviewNote>
+    {mode === "home" && (welcome || authConfirmed) && <DashboardWelcome emailConfirmed={authConfirmed} />}
+    <PageHeading eyebrow={mode === "explore" ? "DISCOVER WHAT'S GROWING" : "GOOD WORK, SHARED OPENLY"} title={title} description={mode === "explore" ? "Find the tools, experiments, and open-source work people are building." : "Published projects from the CodeBloom community, with live votes, saves, and conversation."} action={<Link href="/publish" className="button button-primary"><Plus size={16} /> Share a project</Link>} />
+    <div className="feed-toolbar"><div className="tabs" role="group" aria-label={isDashboard ? "Sort the live project feed" : "Sort the preview feed"}>{previewFeedModes.map((item) => <button type="button" key={item} className={filter === item ? "tab-active" : ""} aria-pressed={filter === item} onClick={() => setFilter(item)}>{item}</button>)}</div>{mode === "explore" && <label className="inline-search"><Search size={15} aria-hidden="true" /><span className="sr-only">Search projects</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search projects" /></label>}</div>
+    {isDashboard && liveLoading ? <div className="feed-status" role="status"><span className="spinner" aria-hidden="true" /> Loading live projects…</div> : null}
+    {isDashboard && !liveLoading && liveError ? <div className="error-banner" role="alert">{liveError}</div> : null}
+    {!isDashboard && filter === "Following" ? <EmptyState icon={<Users size={24} />} title="Your following feed starts here" description="Follow creators from a live project card to build this feed." action={<Link className="button button-outline" href="/explore"><Compass size={15} /> Explore projects</Link>} /> : null}
+    {!liveLoading && !liveError && (isDashboard || filter !== "Following") && visible.length ? <div className="feed-list" aria-live="polite">{visible.map((project) => <ProjectCard key={project.slug} project={project} liveProject={isDashboard ? project as LiveProject : undefined} />)}</div> : null}
+    {isDashboard && !liveLoading && !liveError && visible.length === 0 ? <EmptyState icon={<Compass size={24} />} title={filter === "Following" ? "Your following feed is ready to grow" : "No live projects yet"} description={filter === "Following" ? "Follow a creator from a project card and their published work will appear here." : "When members publish projects, they will appear here. You can be among the first to share one."} action={<Link className="button button-outline" href="/publish"><Plus size={15} /> Share a project</Link>} /> : null}
+    {!isDashboard && filter !== "Following" && visible.length === 0 ? <EmptyState icon={<Search size={24} />} title="No projects found" description="Try another project name, developer, or technology." action={query ? <button className="button button-outline" type="button" onClick={() => setQuery("")}>Clear search</button> : undefined} /> : null}
+    {isDashboard ? <p className="live-feed-note">Live feed · public published projects · private account actions</p> : <PreviewNote>Feed order and sample projects are local preview data, not the production ranking or a live community feed.</PreviewNote>}
   </section>;
 }
 
 export function PublishView() {
   const { publish } = useCommunity();
+  const supabaseConfigured = Boolean(getSupabaseConfig());
   const [status, setStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [error, setError] = useState("");
 
@@ -53,7 +92,7 @@ export function PublishView() {
     setStatus("saving");
 
     try {
-      if (process.env.NEXT_PUBLIC_SUPABASE_URL) {
+      if (supabaseConfigured) {
         const response = await fetch("/api/projects", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
         const body = await response.json() as { error?: string };
         if (!response.ok) throw new Error(body.error ?? "Unable to publish this project. Check your sign-in and Supabase setup.");
@@ -71,46 +110,78 @@ export function PublishView() {
   return <section className="form-page"><PageHeading eyebrow="BUILD IN PUBLIC" title="Share your project" description="Give people enough context to understand what you made and how they can explore it." />{status === "saved" && <p className="success-banner" role="status"><Check size={17} /> {process.env.NEXT_PUBLIC_SUPABASE_URL ? "Project submitted. Its visibility follows your configured account and database policies." : "Project added to this browser preview only."}</p>}{error && <p className="error-banner" role="alert">{error}</p>}<form className="publish-form" onSubmit={submit}><label>Project name<input required name="name" maxLength={80} minLength={2} placeholder="Signal Garden" /></label><label>One-line description<input required name="tagline" maxLength={140} minLength={8} placeholder="A calmer way to understand notifications." /></label><label>What are you building?<textarea required name="description" maxLength={2000} minLength={20} placeholder="Share the problem, your approach, and what makes it useful." rows={6} /></label><div className="two-up"><label>GitHub repository<input required name="repo" type="url" pattern="https://github\.com/.*" title="Use an HTTPS github.com repository URL" placeholder="https://github.com/you/project" /></label><label>Topics<input required name="tags" placeholder="TypeScript, Next.js, Open source" /></label></div><p className="form-hint">Add up to five comma-separated topics. A GitHub repository URL is required.</p><div className="form-actions"><Link className="button button-outline" href="/">Cancel</Link><button className="button button-primary" type="submit" disabled={status === "saving"}>{status === "saving" ? <span className="spinner" aria-hidden="true" /> : <Send size={16} />}{status === "saving" ? "Publishing…" : "Publish project"}</button></div></form><PreviewNote>{process.env.NEXT_PUBLIC_SUPABASE_URL ? "This form requires an authenticated Supabase user and the reviewed project migration to be applied. A live publish has not been verified." : "Without Supabase configuration, projects are stored in this browser only and will not be visible to anyone else."}</PreviewNote></section>;
 }
 
-export function LoginView() {
-  const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
-  const [busy, setBusy] = useState(false);
-
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError(""); setMessage(""); setBusy(true);
-    const form = event.currentTarget;
-    try {
-      const { createSupabaseBrowserClient } = await import("@/lib/supabase/browser");
-      const data = new FormData(form);
-      const { error: signInError } = await createSupabaseBrowserClient().auth.signInWithPassword({ email: String(data.get("email") ?? ""), password: String(data.get("password") ?? "") });
-      if (signInError) throw new Error("We couldn't sign you in. Check your details and Supabase Auth configuration.");
-      setMessage("Sign-in succeeded. Account and session flows are still being completed; refresh before using protected actions.");
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Sign-in is unavailable. Check the local Supabase configuration.");
-    } finally { setBusy(false); }
-  }
-
-  return <section className="form-page auth-page"><PageHeading eyebrow="YOUR WORK, YOUR SPACE" title="Sign in" description="Use your CodeBloom account to save work and take part in the community." /><form className="publish-form" onSubmit={submit}><label>Email<input required name="email" type="email" autoComplete="email" /></label><label>Password<input required name="password" type="password" minLength={8} autoComplete="current-password" /></label>{error && <p className="error-banner" role="alert">{error}</p>}{message && <p className="success-banner" role="status"><Check size={17} /> {message}</p>}<button className="button button-primary" type="submit" disabled={busy}>{busy ? <span className="spinner" aria-hidden="true" /> : <LogIn size={16} />}{busy ? "Signing in…" : "Sign in"}</button><p className="auth-help"><LockKeyhole size={15} /> Sign-up, recovery, OAuth callbacks, and complete session handling are not part of this preview phase.</p></form><PreviewNote>A Supabase URL and publishable key alone do not complete account setup.</PreviewNote></section>;
-}
-
 export function ProjectDetail({ slug }: { slug: string }) {
   const { projects, bookmarked, toggleBookmark } = useCommunity();
-  const project = projects.find((item) => item.slug === slug);
-  if (!project) return <EmptyState icon={<Compass size={24} />} title="Project not found" description="This project may have moved or is not included in this browser preview." action={<Link className="button button-primary" href="/explore">Explore projects</Link>} />;
+  const { user } = useAuth();
+  const previewProject = projects.find((item) => item.slug === slug);
+  const [liveProject, setLiveProject] = useState<LiveProject | null>(null);
+  const [liveLookupDone, setLiveLookupDone] = useState(false);
+  const [gateOpen, setGateOpen] = useState(false);
+  const [notice, setNotice] = useState("");
+  const pathname = usePathname() || `/projects/${slug}`;
+  useEffect(() => {
+    const controller = new AbortController();
+    void fetch(`/api/projects/${encodeURIComponent(slug)}`, { signal: controller.signal, cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) return null;
+        const body = await response.json() as { project?: LiveProject };
+        return body.project ?? null;
+      })
+      .then((value) => setLiveProject(value))
+      .catch(() => { /* Public preview detail remains available if live data is offline. */ })
+      .finally(() => { if (!controller.signal.aborted) setLiveLookupDone(true); });
+    return () => controller.abort();
+  }, [slug]);
+
+  if (!liveProject && !previewProject && !liveLookupDone) return <section className="detail-page"><div className="feed-status" role="status"><span className="spinner" aria-hidden="true" /> Loading project…</div></section>;
+  const project = liveProject ?? previewProject;
+  if (!project) return <EmptyState icon={<Compass size={24} />} title="Project not found" description="This project may have moved or is not included in the live feed or preview." action={<Link className="button button-primary" href="/explore">Explore projects</Link>} />;
   const repositoryUrl = safeGitHubRepositoryUrl(project.repo);
   const demoUrl = project.demo ? safeHttpsUrl(project.demo) : null;
-
-  return <section className="detail-page"><Link className="back-link" href="/explore"><ArrowLeft size={14} /> Back to explore</Link><PageHeading eyebrow={`${project.status.toUpperCase()} · PREVIEW PROJECT`} title={project.name} description={project.tagline} action={<button className="button button-outline" type="button" onClick={() => toggleBookmark(project.slug)} aria-pressed={bookmarked.includes(project.slug)}><Bookmark size={16} fill={bookmarked.includes(project.slug) ? "currentColor" : "none"} /> {bookmarked.includes(project.slug) ? "Saved" : "Save project"}</button>} /><div className="detail-art"><FeaturedProject project={project} /></div><article className="detail-card"><div className="detail-author"><span className={`avatar avatar-${project.avatarTone}`}>{project.initials}</span><span>Built by <Link href={`/u/${project.handle}`}>{project.author}</Link><small>@{project.handle} · {project.time}</small></span><span className={`status-pill status-${project.statusTone}`}><i />{project.status}</span></div><p className="detail-description">{project.description}</p><dl><div><dt>Appreciations</dt><dd>{project.votes}</dd></div><div><dt>Conversations</dt><dd>{project.comments}</dd></div><div><dt>Topics</dt><dd>{project.tags.length}</dd></div></dl><div className="project-tags" aria-label="Project topics">{project.tags.map((tag) => <Link className="tag-chip" href={`/communities/${encodeURIComponent(tag.toLowerCase().replace(/[^a-z0-9]+/g, "-"))}`} key={tag}>#{tag}</Link>)}</div><div className="detail-links">{repositoryUrl ? <a className="button button-outline" href={repositoryUrl} target="_blank" rel="noopener noreferrer">View source <ArrowUpRight size={15} /></a> : <span className="text-muted">Repository link unavailable</span>}{demoUrl && <a className="text-link" href={demoUrl} target="_blank" rel="noopener noreferrer">Live demo <ArrowUpRight size={14} /></a>}</div></article><section className="discussion" id="discussion"><div className="section-title-row"><h2><MessageCircle size={19} /> Discussion</h2><span className="preview-tag">Preview</span></div><p>Project discussion will appear here when comments and server-side authorization are implemented. For now, explore the project and its source code.</p><Link className="button button-outline" href="/login"><LogIn size={15} /> Sign in to join later</Link></section><PreviewNote>Project content, totals, and activity on this page are illustrative local data.</PreviewNote></section>;
+  if (liveProject) return <section className="detail-page"><Link className="back-link" href="/dashboard"><ArrowUpRight size={14} /> Back to dashboard</Link><PageHeading eyebrow="LIVE COMMUNITY PROJECT" title={liveProject.name} description={liveProject.tagline} /><ProjectCard project={liveProject} liveProject={liveProject} /><article className="detail-card"><p className="detail-description">{liveProject.description}</p><dl><div><dt>Live score</dt><dd>{liveProject.score}</dd></div><div><dt>Comments</dt><dd>{liveProject.commentsCount}</dd></div><div><dt>Topics</dt><dd>{liveProject.tags.length}</dd></div></dl><div className="project-tags" aria-label="Project topics">{liveProject.tags.map((tag) => <Link className="tag-chip" href={`/explore?q=${encodeURIComponent(tag)}`} key={tag}>#{tag}</Link>)}</div><div className="detail-links">{repositoryUrl && <a className="button button-outline" href={repositoryUrl} target="_blank" rel="noopener noreferrer">View source <ArrowUpRight size={15} /></a>}{demoUrl && <a className="text-link" href={demoUrl} target="_blank" rel="noopener noreferrer">Live demo <ArrowUpRight size={14} /></a>}</div></article></section>;
+  return <section className="detail-page"><Link className="back-link" href="/explore"><ArrowUpRight size={14} /> Back to explore</Link><PageHeading eyebrow={`${project.status.toUpperCase()} · PREVIEW PROJECT`} title={project.name} description={project.tagline} action={<button className="button button-outline" type="button" onClick={() => { if (!user) { setGateOpen(true); return; } toggleBookmark(project.slug); setNotice("Bookmark saved to this browser preview only."); }} aria-pressed={bookmarked.includes(project.slug)}><Bookmark size={16} fill={bookmarked.includes(project.slug) ? "currentColor" : "none"} /> {bookmarked.includes(project.slug) ? "Saved" : "Save project"}</button>} /><div className="detail-art"><ProjectArtwork project={project} /></div><article className="detail-card"><div className="detail-author"><span className={`avatar avatar-${project.avatarTone}`}>{project.initials}</span><span>Built by <Link href={`/u/${project.handle}`}>{project.author}</Link><small>@{project.handle} · {project.time}</small></span><span className={`status-pill status-${project.statusTone}`}><i />{project.status}</span></div><p className="detail-description">{project.description}</p><dl><div><dt>Preview appreciations</dt><dd>{project.votes}</dd></div><div><dt>Conversations</dt><dd>{project.comments}</dd></div><div><dt>Topics</dt><dd>{project.tags.length}</dd></div></dl><div className="project-tags" aria-label="Project topics">{project.tags.map((tag) => <Link className="tag-chip" href={`/communities/${encodeURIComponent(tag.toLowerCase().replace(/[^a-z0-9]+/g, "-"))}`} key={tag}>#{tag}</Link>)}</div><div className="detail-links">{repositoryUrl && <a className="button button-outline" href={repositoryUrl} target="_blank" rel="noopener noreferrer">View source <ArrowUpRight size={15} /></a>}{demoUrl && <a className="text-link" href={demoUrl} target="_blank" rel="noopener noreferrer">Live demo <ArrowUpRight size={14} /></a>}</div></article>{notice && <p className="preview-feedback" role="status">{notice}</p>}<section className="discussion" id="discussion"><div className="section-title-row"><h2><MessageCircle size={19} /> Discussion</h2><span className="preview-tag">Preview</span></div><p>Project discussion will appear here when comments and server-side authorization are implemented. For now, explore the project and its source code.</p><Link className="button button-outline" href={`/login?next=${encodeURIComponent(`/projects/${slug}#discussion`)}`}><LogIn size={15} /> Sign in to join later</Link></section><PreviewNote>Project content, totals, and activity on this page are illustrative local data.</PreviewNote><AuthGateDialog open={gateOpen} onClose={() => setGateOpen(false)} action="save this project" returnTo={pathname} /></section>;
 }
 
-export function ProfileView({ handle }: { handle: string }) {
+export function ProfileView({ handle, profile }: { handle: string; profile: PublicProfile | null }) {
   const { projects } = useCommunity();
-  const [notice, setNotice] = useState("");
-  const authored = projects.filter((project) => project.handle.toLowerCase() === handle.toLowerCase());
-  const profile = authored[0];
-  if (!profile) return <EmptyState icon={<Users size={24} />} title="Developer not found" description="This profile is not included in the current preview." action={<Link className="button button-primary" href="/explore">Explore projects</Link>} />;
-  return <section className="profile-page"><PageHeading eyebrow="DEVELOPER PROFILE · PREVIEW" title={profile.author} description={`@${profile.handle} · Building in public on CodeBloom.`} action={<button className="button button-outline" type="button" onClick={() => setNotice("Developer follows are not connected in this preview.")}>Follow developer</button>} />{notice && <p className="preview-feedback" role="status">{notice}</p>}<article className="detail-card profile-summary"><div className={`avatar avatar-large avatar-${profile.avatarTone}`}>{profile.initials}</div><div><h2>{profile.author}</h2><p>Sharing thoughtful software, open-source experiments, and lessons learned along the way.</p><span className="profile-stat"><strong>{authored.length}</strong> shared {authored.length === 1 ? "project" : "projects"}</span></div></article><h2 className="subheading">Projects by {profile.author}</h2><div className="feed-list">{authored.map((project) => <ProjectCard key={project.slug} project={project} />)}</div><PreviewNote>Profiles and follow relationships are sample data in this preview.</PreviewNote></section>;
+  const { user } = useAuth();
+  const pathname = usePathname() || `/u/${handle}`;
+  const [following, setFollowing] = useState(false);
+  const [followBusy, setFollowBusy] = useState(false);
+  const [followNotice, setFollowNotice] = useState("");
+  const [gateOpen, setGateOpen] = useState(false);
+  useEffect(() => {
+    if (!profile || !user) return;
+    const controller = new AbortController();
+    void fetch(`/api/social?creator=${encodeURIComponent(profile.username)}`, { signal: controller.signal, cache: "no-store" })
+      .then(async (response) => response.ok ? response.json() as Promise<{ following: boolean }> : null)
+      .then((result) => { if (result) setFollowing(result.following); })
+      .catch(() => { /* Keep public profile browsing available when social data is unavailable. */ });
+    return () => controller.abort();
+  }, [profile, user]);
+  const previewProjects = projects.filter((project) => project.handle.toLowerCase() === handle.toLowerCase());
+  const preview = previewProjects[0];
+  const displayName = profile?.displayName || preview?.author;
+  if (!displayName) return <EmptyState icon={<Users size={24} />} title="Developer not found" description="No public CodeBloom profile was found for this username." action={<Link className="button button-primary" href="/explore">Explore projects</Link>} />;
+  const initials = displayName.trim().split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
+  const joined = profile ? new Intl.DateTimeFormat("en", { year: "numeric", month: "long", timeZone: "UTC" }).format(new Date(profile.createdAt)) : null;
+  async function toggleFollow() {
+    if (!user) { setGateOpen(true); return; }
+    if (!profile) { setFollowNotice("Creator follows are available on live project profiles; this profile is preview data."); return; }
+    if (followBusy) return;
+    setFollowBusy(true);
+    setFollowNotice("");
+    try {
+      const next = !following;
+      const response = await fetch("/api/social", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "follow", creatorUsername: profile.username, following: next }) });
+      const body = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(body.error ?? "Unable to update follow status.");
+      setFollowing(next);
+      setFollowNotice(next ? `You are now following ${displayName}.` : `You unfollowed ${displayName}.`);
+    } catch (cause) { setFollowNotice(cause instanceof Error ? cause.message : "Unable to update follow status."); }
+    finally { setFollowBusy(false); }
+  }
+  return <section className="profile-page"><PageHeading eyebrow={profile ? "PUBLIC DEVELOPER PROFILE" : "DEVELOPER PROFILE · PREVIEW"} title={displayName} description={`@${profile?.username ?? preview?.handle} · ${profile?.bio || "Building in public on CodeBloom."}`} action={<button className="button button-outline" type="button" aria-pressed={following} disabled={followBusy} onClick={() => void toggleFollow()}>{followBusy ? "Saving…" : following ? "Following" : "Follow developer"}</button>} />{followNotice && <p className={followNotice.startsWith("Unable") ? "error-banner" : "preview-feedback"} role={followNotice.startsWith("Unable") ? "alert" : "status"}>{followNotice}</p>}<article className="detail-card profile-summary"><div className={`avatar avatar-large avatar-${profile ? "violet" : preview?.avatarTone ?? "violet"}`}>{initials}</div><div><h2>{displayName}</h2><p>{profile ? profile.bio || "This developer hasn't added a bio yet." : "Sharing thoughtful software, open-source experiments, and lessons learned along the way."}</p>{joined && <span className="profile-stat">Member since <strong>{joined}</strong></span>}{!profile && <span className="profile-stat"><strong>{previewProjects.length}</strong> shared {previewProjects.length === 1 ? "project" : "projects"}</span>}</div></article><h2 className="subheading">Projects by {displayName}</h2>{profile ? <EmptyState icon={<Compass size={24} />} title="No live projects linked yet" description="This public profile is live Supabase data. Project ownership is not yet connected to this public profile view." /> : <div className="feed-list">{previewProjects.map((item) => <ProjectCard key={item.slug} project={item} />)}</div>}<PreviewNote>{profile ? "Profile details and follow status are live account data. Public project ownership is not yet connected to this profile view." : "This developer profile and its projects are local preview data."}</PreviewNote><AuthGateDialog open={gateOpen} onClose={() => setGateOpen(false)} action="follow this creator" returnTo={pathname} /></section>;
 }
 
 const communityInfo: Record<string, { title: string; description: string; tags: string[] }> = {
@@ -122,26 +193,37 @@ const communityInfo: Record<string, { title: string; description: string; tags: 
 
 export function CommunityView({ slug }: { slug: string }) {
   const [notice, setNotice] = useState("");
+  const [gateOpen, setGateOpen] = useState(false);
+  const { user } = useAuth();
   const info = communityInfo[slug];
   const related = info ? seedProjects.filter((project) => project.tags.some((tag) => info.tags.includes(tag.toLowerCase()))) : [];
-  if (!info) return <EmptyState icon={<Users size={24} />} title="Community not found" description="That topic is not part of this local preview." action={<Link className="button button-primary" href="/communities">Browse communities</Link>} />;
-  return <section><PageHeading eyebrow="TOPIC COMMUNITY · PREVIEW" title={info.title} description={info.description} action={<button className="button button-outline" type="button" onClick={() => setNotice("Community memberships are not connected in this preview.")}>Join community</button>} />{notice && <p className="preview-feedback" role="status">{notice}</p>}{related.length ? <div className="feed-list">{related.map((project) => <ProjectCard key={project.slug} project={project} />)}</div> : <EmptyState icon={<Sparkles size={24} />} title="A space for new work" description="No example projects are tagged here yet. Explore the full community feed to discover more." action={<Link className="button button-outline" href="/explore">Explore projects</Link>} />}<PreviewNote>Community memberships and counts are illustrative only.</PreviewNote></section>;
+  return <section className="community-page"><PageHeading eyebrow="COMMUNITY · PREVIEW" title={info?.title ?? "Community"} description={info?.description ?? "A place to find related projects and builders."} action={<button className="button button-primary" type="button" onClick={() => user ? setNotice("Community membership is not available yet.") : setGateOpen(true)}><Users size={15} /> Join community</button>} />{notice && <p className="preview-feedback" role="status">{notice}</p>}<div className="feed-list">{related.map((project) => <ProjectCard key={project.slug} project={project} />)}</div><PreviewNote>Community membership remains a preview feature.</PreviewNote><AuthGateDialog open={gateOpen} onClose={() => setGateOpen(false)} action="join this community" returnTo={`/communities/${slug}`} /></section>;
 }
 
-type ListItem = { title: string; body: string; foot?: string };
-function ListPage({ title, eyebrow, description, icon, items }: { title: string; eyebrow: string; description: string; icon: ReactNode; items: ListItem[] }) {
-  return <section><PageHeading title={title} eyebrow={eyebrow} description={description} /><div className="list-card">{items.map((item, index) => <article key={`${item.title}-${index}`}><span className="list-icon">{icon}</span><div><strong>{item.title}</strong><p>{item.body}</p>{item.foot && <small>{item.foot}</small>}</div></article>)}</div><PreviewNote>These examples are synthetic preview data, not live account activity.</PreviewNote></section>;
-}
-
-export function SimplePage({ kind }: { kind: "bookmarks" | "notifications" | "messages" | "communities" | "settings" }) {
-  const { projects, bookmarked } = useCommunity();
+export function SimplePage({ kind }: { kind: "bookmarks" | "notifications" | "messages" | "settings" | "communities" }) {
   const { theme, toggleTheme } = useTheme();
-  if (kind === "bookmarks") {
-    const saved = projects.filter((project) => bookmarked.includes(project.slug));
-    return <section><PageHeading eyebrow="YOUR COLLECTION" title="Bookmarks" description="Projects you saved to revisit later on this device." />{saved.length ? <div className="feed-list">{saved.map((project) => <ProjectCard project={project} key={project.slug} />)}</div> : <EmptyState icon={<Bookmark size={24} />} title="Nothing saved yet" description="Save a project while exploring and it will appear here." action={<Link href="/explore" className="button button-primary">Explore projects</Link>} />}<PreviewNote>Bookmarks currently stay in this browser and are not synced to an account.</PreviewNote></section>;
-  }
-  if (kind === "notifications") return <ListPage title="Activity" eyebrow="STAY IN THE LOOP" description="A quiet place for meaningful community updates." icon={<Bell size={20} />} items={notifications.map((item) => ({ title: `${item.name} ${item.action}`, body: item.subject ? `${item.subject} · ${item.time}` : item.time, foot: item.unread ? "Preview · unread" : "Preview" }))} />;
-  if (kind === "messages") return <section><PageHeading title="Messages" eyebrow="PRIVATE CONVERSATIONS" description="Private conversations are unlocked only after a recipient accepts a request." /><div className="privacy-callout"><ShieldCheck size={20} /><div><strong>Private by design</strong><p>This preview does not open real conversations. Pending requests cannot exchange ordinary messages.</p></div></div><h2 className="subheading">Incoming requests · preview</h2><div className="list-card">{pendingRequests.map((request) => <article key={request.id}><span className={`avatar avatar-${request.tone}`}>{request.initials}</span><div><strong>{request.name} <span className="request-state">Pending</span></strong><p>{request.note}</p><small>{request.mutual} · {request.time}</small></div></article>)}</div><div className="locked-conversations"><LockKeyhole size={17} /><span>Accepted conversations will appear here after server-side authorization is implemented.</span></div><PreviewNote>Names and introductory messages above are invented preview fixtures, not real private messages.</PreviewNote></section>;
-  if (kind === "communities") return <section><PageHeading title="Communities" eyebrow="FIND YOUR PEOPLE" description="Explore topic spaces for the tools and ideas you care about." /><div className="community-grid">{[{ slug: "opensource", title: "Open source", count: "2.4k", body: "Build in the open and share what you learn." }, { slug: "indie-makers", title: "Indie makers", count: "1.8k", body: "Small teams, independent products, practical lessons." }, { slug: "design-systems", title: "Design systems", count: "980", body: "Tokens, components, and thoughtful interfaces." }].map((community) => <Link className="community-card" key={community.slug} href={`/communities/${community.slug}`}><span className="community-icon"><Users size={18} /></span><span className="eyebrow">{community.count} preview members</span><strong>{community.title}</strong><p>{community.body}</p><span className="rail-more">Explore community <ArrowUpRight size={14} /></span></Link>)}</div><PreviewNote>Topics and member counts are example content. Membership actions are not connected.</PreviewNote></section>;
-  return <section><PageHeading title="Settings" eyebrow="PREFERENCES" description="A few interface controls for this local preview." /><div className="settings-card"><div className="settings-copy"><span className="settings-icon"><Settings2 size={18} /></span><div><strong>Color theme</strong><p>Choose a comfortable appearance. Your selection stays in this browser.</p></div></div><button className="button button-outline" type="button" onClick={toggleTheme}>{theme === "dark" ? "Switch to light" : "Switch to dark"}</button></div><div className="detail-card" id="about"><h2>About CodeBloom</h2><p>Discover. Discuss. Build upon. A project-centered developer community, designed to make good work easier to find and improve together.</p><Link className="text-link" href="/explore">Explore projects <ArrowUpRight size={14} /></Link></div><div className="detail-card" id="guidelines"><h2>Community guidelines</h2><p>Share context, critique ideas with care, credit the work that inspired you, and respect each other’s boundaries.</p></div><div className="detail-card" id="privacy"><h2>Privacy in this preview</h2><p>Sample activity and browser-local interactions are not private account records and are not shared. Live conversations are not enabled.</p></div><PreviewNote>Account security and durable user preferences arrive with the later authentication phase.</PreviewNote></section>;
+  const [bookmarkResult, setBookmarkResult] = useState<{ projects: LiveProject[]; error: string } | null>(null);
+  useEffect(() => {
+    if (kind !== "bookmarks") return;
+    const controller = new AbortController();
+    void fetch("/api/feed?mode=Bookmarks", { signal: controller.signal, cache: "no-store" })
+      .then(async (response) => {
+        const body = await response.json() as { projects?: LiveProject[]; error?: string };
+        if (!response.ok) throw new Error(body.error ?? "Unable to load saved projects.");
+        setBookmarkResult({ projects: body.projects ?? [], error: "" });
+      })
+      .catch((cause: unknown) => {
+        if (cause instanceof DOMException && cause.name === "AbortError") return;
+        setBookmarkResult({ projects: [], error: cause instanceof Error ? cause.message : "Unable to load saved projects." });
+      });
+    return () => controller.abort();
+  }, [kind]);
+  const content = {
+    bookmarks: { title: "Your bookmarks", text: "Projects you save will be easy to find here.", icon: <Bookmark size={24} /> },
+    notifications: { title: "Notifications", text: "Meaningful project activity will appear here.", icon: <Bell size={24} /> },
+    messages: { title: "Messages", text: "Private conversations are not available yet.", icon: <MessageCircle size={24} /> },
+    settings: { title: "Settings", text: "Manage your account and profile preferences.", icon: <Settings2 size={24} /> },
+    communities: { title: "Communities", text: "Find and join topic spaces around the work you care about.", icon: <Users size={24} /> },
+  }[kind];
+  return <section><PageHeading eyebrow="YOUR WORKSPACE" title={content.title} description={content.text} />{kind === "settings" && <div className="settings-card"><div className="settings-copy"><span className="settings-icon"><Settings2 size={16} /></span><div><strong>Appearance</strong><p>Choose a comfortable reading theme. Current: {theme}.</p></div></div><button type="button" className="button button-outline" onClick={toggleTheme}>Switch to {theme === "dark" ? "light" : "dark"}</button></div>}{kind === "bookmarks" ? bookmarkResult === null ? <div className="feed-status" role="status"><span className="spinner" aria-hidden="true" /> Loading saved projects…</div> : bookmarkResult.error ? <p className="error-banner" role="alert">{bookmarkResult.error}</p> : bookmarkResult.projects.length ? <div className="feed-list">{bookmarkResult.projects.map((project) => <ProjectCard key={project.slug} project={project} liveProject={project} />)}</div> : <EmptyState icon={content.icon} title="No saved projects yet" description="Use the bookmark control on a live project to keep it close. Saved projects will appear here across sessions." action={<Link className="button button-outline" href="/dashboard"><Compass size={15} /> Back to dashboard</Link>} /> : <EmptyState icon={content.icon} title="This space is growing" description="This workspace page will be connected to live data in a later step." />}</section>;
 }
