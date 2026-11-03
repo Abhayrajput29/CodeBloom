@@ -6,12 +6,6 @@ export function LandingHeroInteractive() {
   return (
     <section className="cb-hero-interactive relative w-full min-h-[92vh] flex flex-col items-center justify-center text-center px-4 pt-24 pb-16 z-10">
       <div className="relative z-10 max-w-4xl mx-auto flex flex-col items-center">
-        {/* Luminous pill badge */}
-        <div className="cb-hero-badge inline-flex items-center gap-2 px-4 py-1.5 mb-8 rounded-full border text-xs font-semibold tracking-widest uppercase backdrop-blur-xl transition-all">
-          <span className="w-2 h-2 rounded-full bg-[#d84878] shadow-[0_0_8px_#d84878] animate-pulse" />
-          <span>Interactive 3D Botanical Universe</span>
-        </div>
-
         {/* Hero Title */}
         <h1 className="cb-hero-title text-5xl sm:text-7xl md:text-8xl font-black mb-6 tracking-tight leading-[1.05]">
           IDEAS GROW.<br />

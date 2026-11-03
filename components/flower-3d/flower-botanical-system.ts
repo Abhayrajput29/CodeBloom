@@ -136,9 +136,6 @@ export class BotanicalWorld {
         0.18
       );
 
-      // Golden ratio angle distribution for organic fractal symmetry
-      const goldenAngle = Math.PI * (3 - Math.sqrt(5));
-
       for (let i = 0; i < tier.count; i++) {
         const pivot = new THREE.Group();
         const mesh = new THREE.Mesh(geom, mat);
@@ -555,7 +552,7 @@ export class BotanicalWorld {
   /**
    * Master Update Frame Loop
    */
-  public update(delta: number, elapsedTime: number, scrollProgress: number) {
+  public update(delta: number, elapsedTime: number) {
     // Smooth bloom progression
     if (this.bloomProgress < this.targetBloomProgress) {
       this.bloomProgress = Math.min(

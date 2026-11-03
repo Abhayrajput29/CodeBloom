@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
@@ -8,10 +7,10 @@ import { useTheme } from "@/components/theme-provider";
 
 export function FlowerScene() {
   const { theme } = useTheme();
+  const themeRef = useRef(theme);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const worldRef = useRef<BotanicalWorld | null>(null);
   const [bloomProgress, setBloomProgress] = useState(0.0);
-  const [isInteractiveManual, setIsInteractiveManual] = useState(false);
 
   // Derive current blooming stage name for HUD
   const getStageName = (p: number) => {
@@ -24,19 +23,18 @@ export function FlowerScene() {
 
   // Synchronize 3D botanical world lighting with the active theme
   useEffect(() => {
+    themeRef.current = theme;
     worldRef.current?.setTheme(theme);
   }, [theme]);
 
   const handleReplay = useCallback(() => {
     if (worldRef.current) {
-      setIsInteractiveManual(false);
       worldRef.current.replayBloom();
     }
   }, []);
 
   const handleManualBloomChange = useCallback((value: number) => {
     if (worldRef.current) {
-      setIsInteractiveManual(true);
       worldRef.current.bloomProgress = value;
       worldRef.current.targetBloomProgress = value;
       setBloomProgress(value);
@@ -80,7 +78,7 @@ export function FlowerScene() {
 
     // 3. Botanical World Setup
     const world = new BotanicalWorld();
-    world.setTheme(theme);
+    world.setTheme(themeRef.current);
     worldRef.current = world;
     scene.add(world.rootGroup);
 
@@ -163,7 +161,7 @@ export function FlowerScene() {
       mouse.y += (mouse.targetY - mouse.y) * 0.06;
 
       // Update botanical world kinematics and bloom
-      world.update(delta, elapsedTime, scrollFraction);
+      world.update(delta, elapsedTime);
       // Only trigger React state updates when bloom progress actually animates (eliminates 60fps re-render overhead)
       if (Math.abs(lastProgress - world.bloomProgress) > 0.04 || (world.bloomProgress < 0.99 && lastProgress !== world.bloomProgress)) {
         lastProgress = world.bloomProgress;

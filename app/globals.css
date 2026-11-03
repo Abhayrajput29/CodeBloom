@@ -1,12 +1,7 @@
 @import "tailwindcss";
 @import "./entry.css";
+@import "./logo.css";
 
-@font-face {
-  font-family: "Coolvetica HC";
-  src: url("/fonts/coolvetica-heavy-compressed.otf") format("opentype");
-  font-weight: 850;
-  font-display: swap;
-}
 
 :root {
   color-scheme: dark;
@@ -254,7 +249,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .status-green { color: var(--green); }.status-blue { color: var(--blue); }.status-amber { color: var(--amber); }
 .repo-label { max-width: 100%; overflow-wrap: anywhere; color: var(--subtle); font: 9px ui-monospace, SFMono-Regular, Menlo, monospace; }
 .repo-dot { margin-right: 4px; color: var(--muted); }
-.tag-chip { border-color: transparent; background: color-mix(in srgb, var(--violet) 9%, var(--surface)); color: var(--muted); }
 a.tag-chip:hover { border-color: var(--violet); color: var(--text); }
 .project-card-footer { justify-content: space-between; gap: 12px; margin-top: 13px; padding-top: 10px; border-top: 1px solid var(--line); }
 .engagement-actions { gap: 13px; }
@@ -336,6 +330,7 @@ a.tag-chip:hover { border-color: var(--violet); color: var(--text); }
 .section-title-row { justify-content: space-between; }
 .discussion p { margin: 10px 0 14px; color: var(--muted); font-size: 11px; line-height: 1.7; }
 .preview-tag, .request-state { padding: 3px 7px; border: 1px solid var(--line); border-radius: 99px; color: var(--subtle); font-size: 9px; font-weight: 600; }
+.tag-chip, .preview-tag { border-color: color-mix(in srgb, var(--violet) 36%, var(--line)); background: color-mix(in srgb, var(--violet) 17%, var(--surface)); color: var(--violet); }
 .profile-summary { display: flex; gap: 17px; align-items: flex-start; }
 .profile-summary h2 { margin: 0; font-size: 17px; }
 .profile-summary p { margin: 7px 0 11px; color: var(--muted); font-size: 11px; }
