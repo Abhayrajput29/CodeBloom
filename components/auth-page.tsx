@@ -8,7 +8,6 @@ import {
   Mail, Moon, Sprout, Sun,
 } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
-import { CodeBloomLogo } from "@/components/code-bloom-logo";
 import { useTheme } from "@/components/theme-provider";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { authSuccessDestination, safeAuthDestination } from "@/lib/auth-destination";
@@ -91,14 +90,8 @@ export function AuthPage({ mode, next = "/dashboard", authError = false }: { mod
   const needsPassword = mode === "login" || mode === "signup" || mode === "reset";
   return <main className="auth-public-page" data-auth-mode={mode}>
     <header className="auth-public-nav">
-      <div className="auth-brand-wrap">
-        <CodeBloomLogo href="/" className="cb-logo-auth" id="auth-logo" />
-        <span className="sr-only">DISCOVER · DISCUSS · BUILD UPON</span>
-      </div>
-      <div className="auth-public-nav-actions">
-        <button className="icon-button theme-button" type="button" onClick={toggleTheme} aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}>{theme === "dark" ? <Sun size={17} /> : <Moon size={17} />}</button>
-        <Link href="/explore">Explore projects</Link>
-      </div>
+      <Link href="/" className="auth-brand" aria-label="CodeBloom home"><span className="brand-icon" aria-hidden="true"><i /><i /><i /><i /></span><span className="brand-name">code<span>bloom</span><small>DISCOVER · DISCUSS · BUILD UPON</small></span></Link>
+      <div><button className="icon-button theme-button" type="button" onClick={toggleTheme} aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}>{theme === "dark" ? <Sun size={17} /> : <Moon size={17} />}</button><Link href="/explore">Explore projects</Link></div>
     </header>
 
     <div className="auth-content">
@@ -122,9 +115,9 @@ export function AuthPage({ mode, next = "/dashboard", authError = false }: { mod
         <p className="auth-panel-description">{copy.description}</p>
         {!configured && <div className="auth-config-warning" role="status"><LockKeyhole size={17} /><span>MongoDB Atlas setup is required to use this form. Public project browsing remains available.</span></div>}
         <form className="auth-form" onSubmit={submit} aria-busy={busy}>
-          {needsEmail && <label>Email address<span className="auth-input-wrap" suppressHydrationWarning><Mail size={16} /><input required type="email" name="email" autoComplete="email" placeholder="you@example.com" suppressHydrationWarning /></span></label>}
-          {needsPassword && <label>{mode === "reset" ? "New password" : "Password"}<span className="auth-input-wrap" suppressHydrationWarning><LockKeyhole size={16} /><input required type={showPassword ? "text" : "password"} name="password" minLength={8} autoComplete={mode === "login" ? "current-password" : "new-password"} placeholder="At least 8 characters" suppressHydrationWarning /><button type="button" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? "Hide password" : "Show password"}>{showPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button></span></label>}
-          {mode === "signup" && <label>Confirm password<span className="auth-input-wrap" suppressHydrationWarning><LockKeyhole size={16} /><input required type={showConfirmPassword ? "text" : "password"} name="confirmPassword" minLength={8} autoComplete="new-password" placeholder="Re-enter your password" suppressHydrationWarning /><button type="button" onClick={() => setShowConfirmPassword((value) => !value)} aria-label={showConfirmPassword ? "Hide confirmation password" : "Show confirmation password"}>{showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button></span><span className="auth-field-hint">Use at least 8 characters and enter the same password twice.</span></label>}
+          {needsEmail && <label>Email address<span className="auth-input-wrap"><Mail size={16} /><input required type="email" name="email" autoComplete="email" placeholder="you@example.com" /></span></label>}
+          {needsPassword && <label>{mode === "reset" ? "New password" : "Password"}<span className="auth-input-wrap"><LockKeyhole size={16} /><input required type={showPassword ? "text" : "password"} name="password" minLength={8} autoComplete={mode === "login" ? "current-password" : "new-password"} placeholder="At least 8 characters" /><button type="button" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? "Hide password" : "Show password"}>{showPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button></span></label>}
+          {mode === "signup" && <label>Confirm password<span className="auth-input-wrap"><LockKeyhole size={16} /><input required type={showConfirmPassword ? "text" : "password"} name="confirmPassword" minLength={8} autoComplete="new-password" placeholder="Re-enter your password" /><button type="button" onClick={() => setShowConfirmPassword((value) => !value)} aria-label={showConfirmPassword ? "Hide confirmation password" : "Show confirmation password"}>{showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button></span><span className="auth-field-hint">Use at least 8 characters and enter the same password twice.</span></label>}
           {mode === "login" && <div className="auth-form-meta"><span>Use your email and password</span><Link href={`/forgot-password?next=${encodeURIComponent(destination)}`}>Forgot password?</Link></div>}
           {error && <p className="error-banner" role="alert">{error}</p>}
           {message && <p className="success-banner" role="status">{message}</p>}
