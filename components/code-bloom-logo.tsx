@@ -1,36 +1,31 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 
 interface CodeBloomLogoProps {
   className?: string;
   onClick?: () => void;
-  href?: string;
-  id?: string;
 }
 
-export function CodeBloomLogo({
-  className = "",
-  onClick,
-  href = "/",
-  id = "home",
-}: CodeBloomLogoProps) {
-  const handleClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
-    onClick?.();
-    if (typeof window !== "undefined" && window.location.pathname === href) {
-      e.preventDefault();
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }
-  };
+export function CodeBloomLogo({ className = "", onClick }: CodeBloomLogoProps) {
+  const [bloomed, setBloomed] = useState(false);
+
+  useEffect(() => {
+    // Trigger botanical blooming entry sequence on mount
+    const timer = setTimeout(() => {
+      setBloomed(true);
+    }, 80);
+    return () => clearTimeout(timer);
+  }, []);
 
   return (
     <Link
-      href={href}
-      id={id}
+      href="/"
+      id="home"
       aria-label="CodeBloom home"
-      onClick={handleClick}
-      draggable={false}
-      className={`cb-logo is-bloomed ${className}`}
+      onClick={onClick}
+      className={`cb-logo ${bloomed ? "is-bloomed" : ""} ${className}`}
     >
       {/* Background botanical vine & leaf silhouettes (resembling Image 1) */}
       <span className="cb-logo-botanical" aria-hidden="true">
