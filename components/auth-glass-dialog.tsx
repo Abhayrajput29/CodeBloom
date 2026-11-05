@@ -4,7 +4,7 @@ import { useEffect, useState, useRef, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
-  ArrowRight, Compass, Eye, EyeOff, LockKeyhole, Mail,
+  ArrowRight, Compass, Eye, EyeOff,
   Sprout, User, X, CheckCircle2, AlertCircle
 } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
@@ -41,14 +41,19 @@ export function AuthGlassDialog({
   // Sync mode when initialMode changes or dialog opens
   useEffect(() => {
     if (open) {
-      setMode(initialMode);
-      setError("");
-      setMessage("");
+      const resetTimer = setTimeout(() => {
+        setMode(initialMode);
+        setError("");
+        setMessage("");
+      }, 0);
       // Autofocus first field when open
-      const timer = setTimeout(() => {
+      const focusTimer = setTimeout(() => {
         emailInputRef.current?.focus();
       }, 100);
-      return () => clearTimeout(timer);
+      return () => {
+        clearTimeout(resetTimer);
+        clearTimeout(focusTimer);
+      };
     }
   }, [open, initialMode]);
 

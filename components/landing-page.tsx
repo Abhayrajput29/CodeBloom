@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect, useSyncExternalStore, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useTheme } from "@/components/theme-provider";
 import { useAuth } from "@/components/auth-provider";
 import { AuthGateDialog } from "@/components/auth-gate-dialog";
@@ -36,8 +36,11 @@ export function LandingPage() {
     const params = new URLSearchParams(window.location.search);
     const authParam = params.get("auth");
     if (authParam === "login" || authParam === "signup" || authParam === "forgot") {
-      setAuthModalMode(authParam as AuthDialogMode);
-      setAuthModalOpen(true);
+      const timer = setTimeout(() => {
+        setAuthModalMode(authParam);
+        setAuthModalOpen(true);
+      }, 0);
+      return () => clearTimeout(timer);
     }
   }, []);
 
